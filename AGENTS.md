@@ -1,281 +1,361 @@
----
-file: AGENTS.md
-description: Project instructions for coding agents
-scope: repository
----
+# AGENTS.md — OS-APOW Project Instructions
 
-<instructions>
-  <purpose>
-    <summary>
-      GitHub Actions-based AI orchestration system. On GitHub events (issues, PR comments, reviews),
-      the `orchestrator-agent` workflow assembles a structured prompt, spins up a devcontainer,
-      and runs `opencode --agent Orchestrator` to delegate work to specialist sub-agents in `.opencode/agents/`.
-    </summary>
-  </purpose>
+> This file provides AI coding agents with the context needed to work effectively on the OS-APOW project.
 
-  <template_usage>
-    <summary>
-      This repository is a **GitHub template repo** (`intel-agency/workflow-orchestration-queue-tango74`).
-      New project repositories are created from it using automation scripts in the
-      `nam20485/workflow-launch2` repo. The scripts clone this template, seed plan docs,
-      replace template placeholders, and push — producing a ready-to-go AI-orchestrated repo.
-    </summary>
+## Project Overview
 
-    <template-clone-instances>
-      Once the template has been cloned into a new instance, this file must be updated to match the new repo's specifics (e.g., name, links, instructions). 
-    </template-clone-instances>
+**OS-APOW** (Orchestration System — Automated Pipeline Orchestration Workflow) is a headless agentic orchestration platform that transforms GitHub Issues into autonomous "Execution Orders" fulfilled by specialized AI agents. The system shifts the AI paradigm from an interactive co-pilot to an autonomous background production service.
 
-    <creation_workflow>
-      <step>1. Run `./scripts/create-repo-from-slug.ps1 -Slug &lt;project-slug&gt; -Yes` from the `workflow-launch2` repo.</step>
-      <step>2. That delegates to `./scripts/create-repo-with-plan-docs.ps1` which:
-        - Creates a new GitHub repo from this template via `gh repo create --template intel-agency/workflow-orchestration-queue-tango74`
-        - Generates a random suffix for the repo name (e.g., `project-slug-bravo84`)
-        - Creates repo secrets (`GEMINI_API_KEY`) and variables (`VERSION_PREFIX`)
-        - Clones the new repo locally
-        - Copies plan docs from `./plan_docs/&lt;slug&gt;/` into the clone's `plan_docs/` directory
-        - Replaces all template placeholders (`workflow-orchestration-queue-tango74` → new repo name, `intel-agency` → new owner)
-        - Commits and pushes the seeded repo
-      </step>
-      <step>3. On push, the clone's `validate` workflow runs CI (lint, scan, tests, devcontainer build) and the `publish-docker` workflow builds and pushes the base Docker image to GHCR.</step>
-      <step>4. On successful `publish-docker` completion, the `prebuild-devcontainer` workflow is triggered (via `workflow_run`) to build and push the prebuilt devcontainer image. Together, `publish-docker` → `prebuild-devcontainer` form the devcontainer prebuild caching pipeline that the `orchestrator-agent` workflow relies on to quickly spin up devcontainers.</step>
-    </creation_workflow>
+**Repository:** `intel-agency/workflow-orchestration-queue-tango74`
 
-    <template_design_constraints>
-      <rule>Template placeholders (`workflow-orchestration-queue-tango74`, `intel-agency`) in file contents and paths are replaced by the creation script. Keep them consistent.</rule>
-      <rule>The `validate` workflow must tolerate fresh clones where no prebuilt GHCR devcontainer image exists yet (fallback build from Dockerfile + image aliasing).</rule>
-      <rule>The `plan_docs/` directory contains external-generated documents seeded at clone time. Exclude it from strict linting (markdown lint, etc.).</rule>
-      <rule>The consumer `.devcontainer/devcontainer.json` references a prebuilt GHCR image. On fresh clones the image won't exist until `publish-docker` and `prebuild-devcontainer` workflows complete their first run.</rule>
-    </template_design_constraints>
+### Technology Stack
 
-    <automation_scripts>
-      <entry><repo>nam20485/workflow-launch2</repo><path>scripts/create-repo-from-slug.ps1</path><description>Entry point — takes a slug, resolves plan docs dir, delegates to create-repo-with-plan-docs.ps1</description></entry>
-      <entry><repo>nam20485/workflow-launch2</repo><path>scripts/create-repo-with-plan-docs.ps1</path><description>Full pipeline: repo create, clone, seed docs, placeholder replace, commit, push</description></entry>
-    </automation_scripts>
-  </template_usage>
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Language | Python | 3.12+ |
+| Package Manager | uv | latest |
+| Web Framework | FastAPI | 0.115+ |
+| ASGI Server | Uvicorn | 0.34+ |
+| Data Validation | Pydantic v2 | 2.10+ |
+| Settings | pydantic-settings | 2.7+ |
+| HTTP Client | HTTPX (async) | 0.28+ |
+| Testing | pytest | 8.0+ |
+| Async Testing | pytest-asyncio | 0.24+ |
+| Test Coverage | pytest-cov | 6.0+ |
+| Linting | ruff | 0.8+ |
+| Type Checking | mypy | 1.13+ |
+| Containerization | Docker, Docker Compose | — |
+| CI/CD | GitHub Actions | — |
 
-  <tech_stack>
-    <item>opencode CLI — agent runtime (`opencode --model zai-coding-plan/glm-5 --agent Orchestrator`)</item>
-    <item>ZhipuAI GLM models via `ZHIPU_API_KEY`</item>
-    <item>GitHub Actions + devcontainers/ci — workflow trigger, runner, reproducible container</item>
-    <item>.NET SDK 10 + Aspire + Avalonia templates, Bun, uv (all in devcontainer)</item>
-    <item>MCP servers: `@modelcontextprotocol/server-sequential-thinking`, `@modelcontextprotocol/server-memory`</item>
-  </tech_stack>
+## Setup Commands
 
-  <repository_map>
-    <!-- Workflows -->
-    <entry><path>.github/workflows/orchestrator-agent.yml</path><description>Primary workflow — assembles prompt, logs into GHCR, runs opencode in devcontainer</description></entry>
-    <entry><path>.github/workflows/prompts/orchestrator-agent-prompt.md</path><description>Prompt template with `__EVENT_DATA__` placeholder (sed-substituted at runtime)</description></entry>
-    <entry><path>.github/workflows/publish-docker.yml</path><description>Builds Dockerfile, pushes to GHCR with branch-latest and branch-&lt;VERSION_PREFIX.run_number&gt; tags</description></entry>
-    <entry><path>.github/workflows/prebuild-devcontainer.yml</path><description>Layers devcontainer Features on published Docker image (triggered by workflow_run)</description></entry>
-    <!-- Agent definitions -->
-    <entry><path>.opencode/agents/orchestrator.md</path><description>Orchestrator — coordinates specialists, never writes code directly</description></entry>
-    <entry><path>.opencode/agents/</path><description>All specialist agents (developer, code-reviewer, planner, devops-engineer, github-expert, etc.)</description></entry>
-    <entry><path>.opencode/commands/</path><description>Reusable command prompts (orchestrate-new-project, grind-pr-reviews, fix-failing-workflows, etc.)</description></entry>
-    <entry><path>.opencode/opencode.json</path><description>opencode config — MCP server definitions</description></entry>
-    <!-- Devcontainer -->
-    <entry><path>.github/.devcontainer/Dockerfile</path><description>Devcontainer image — .NET SDK, Bun, uv, opencode CLI (build context for publish-docker)</description></entry>
-    <entry><path>.github/.devcontainer/devcontainer.json</path><description>Build-time devcontainer config (Dockerfile + Features: node, python, gh CLI)</description></entry>
-    <entry><path>.devcontainer/devcontainer.json</path><description>Consumer devcontainer — pulls prebuilt GHCR image, forwards port 4096, and auto-starts `opencode serve` on container start</description></entry>
-    <entry><path>scripts/start-opencode-server.sh</path><description>Guarded `opencode serve` bootstrapper used by the devcontainer lifecycle and workflow attach path</description></entry>
-    <entry><path>scripts/run-devcontainer-orchestrator.sh</path><description>One-shot script: brings up the devcontainer, ensures the opencode server is running, and executes the orchestrator agent. Used by the workflow and can be invoked directly locally.</description></entry>
-    <!-- Tests -->
-    <entry><path>test/</path><description>Shell-based tests: devcontainer build, tool availability, prompt assembly</description></entry>
+All commands assume the working directory is the repository root.
 
-    <opencode_server>
-      <summary>
-        The consumer devcontainer auto-starts `opencode serve` through `scripts/start-opencode-server.sh`.
-        The server listens on port `4096` by default so host or in-container clients can attach with
-        `opencode run --attach http://127.0.0.1:4096 ...` (or the forwarded host port when connecting from outside the container).
-      </summary>
-    </opencode_server>
-    <entry><path>test/fixtures/</path><description>Sample webhook payloads for local testing</description></entry>
-    <!-- Remote instructions -->
-    <entry><path>local_ai_instruction_modules/</path><description>Local instruction modules (development rules, workflows, delegation, terminal commands)</description></entry>
-  </repository_map>
+```bash
+# Install dependencies (production only)
+uv sync
 
-  <instruction_source>
-    <repository>
-      <name>nam20485/agent-instructions</name>
-      <branch>main</branch>
-    </repository>
-    <guidance>
-      Remote instructions are the single source of truth. Fetch from raw URLs:
-      replace `github.com/` with `raw.githubusercontent.com/` and remove `blob/`.
-      Core instructions: `https://raw.githubusercontent.com/nam20485/agent-instructions/main/ai_instruction_modules/ai-core-instructions.md`
-    </guidance>
-    <modules>
-      <module type="core" required="true" link="https://github.com/nam20485/agent-instructions/blob/main/ai_instruction_modules/ai-core-instructions.md">Core Instructions</module>
-      <module type="local" required="true" path="local_ai_instruction_modules">Local AI Instructions</module>
-      <module type="local" required="true" path="local_ai_instruction_modules/ai-dynamic-workflows.md">Dynamic Workflow Orchestration</module>
-      <module type="local" required="true" path="local_ai_instruction_modules/ai-workflow-assignments.md">Workflow Assignments</module>
-      <module type="local" required="true" path="local_ai_instruction_modules/ai-development-instructions.md">Development Instructions</module>
-      <module type="optional" path="local_ai_instruction_modules/ai-terminal-commands.md">Terminal Commands</module>
-    </modules>
-  </instruction_source>
+# Install dependencies (including dev tools: pytest, ruff, mypy)
+uv sync --extra dev
 
-  <environment_setup>
-    <secrets>
-      <item>`ZHIPU_API_KEY` — ZhipuAI model access; set in repo Settings → Secrets.</item>
-      <item>`KIMI_CODE_ORCHESTRATOR_AGENT_API_KEY` — Kimi (Moonshot) model access; set in repo Settings → Secrets.</item>
-      <item>`GITHUB_TOKEN` — provided automatically by Actions.</item>
-    </secrets>
-    <devcontainer_cache>
-      Image at `ghcr.io/${{ github.repository }}/devcontainer`. `publish-docker.yml` builds the raw Dockerfile;
-      `prebuild-devcontainer.yml` layers Features. Login via `docker/login-action` with `GITHUB_TOKEN`.
-      Set repo variable `VERSION_PREFIX` (e.g., `1.0`) for versioned tags emitted by both image publishing workflows.
-    </devcontainer_cache>
-  </environment_setup>
+# Verify the package imports correctly
+uv run python -c "import osapow; print(osapow.__version__)"
+```
 
-  <testing>
-    <guidance>Tests are shell scripts in `test/`. Run directly with `bash`.</guidance>
-    <commands>
-      <command>All tests: `bash test/test-devcontainer-build.sh && bash test/test-devcontainer-tools.sh && bash test/test-prompt-assembly.sh`</command>
-      <command>Prompt changes: `bash test/test-prompt-assembly.sh`</command>
-      <command>Dockerfile changes: `bash test/test-devcontainer-tools.sh`</command>
-    </commands>
-    <guidance>Add new fixture payloads to `test/fixtures/` when testing new event types.</guidance>
-  </testing>
+### Required Environment Variables
 
-  <coding_conventions>
-    <rule>Keep changes minimal and targeted.</rule>
-    <rule>Do not hardcode secrets/tokens.</rule>
-    <rule>Preserve the `__EVENT_DATA__` placeholder in `orchestrator-agent-prompt.md`.</rule>
-    <rule>Pin action versions by SHA in workflow files.</rule>
-    <rule>Never add duplicate top-level `name:`, `on:`, or `jobs:` keys in workflow YAML.</rule>
-    <rule>`.opencode/` is checked out by `actions/checkout`; do not COPY it in the Dockerfile.</rule>
-    <rule>Dockerfile lives at `.github/.devcontainer/Dockerfile`. Consumer devcontainer uses `"image:"` — no local build.</rule>
-    <rule>Repository labels are defined in `.github/.labels.json`. Use `scripts/import-labels.ps1` to sync them to a repo instance. When adding new labels, add them to this file — it is the single source of truth for the label set.</rule>
-  </coding_conventions>
+Set these in a `.env` file at the repository root (for local development):
 
-  <agent_specific_guardrails>
-    <rule>The Orchestrator agent delegates to specialists via the `task` tool — never writes code directly.</rule>
-    <rule>Prompt assembly pipeline:
-      1. Read template from `.github/workflows/prompts/orchestrator-agent-prompt.md`.
-      2. Prepend structured event context (event name, action, actor, repo, ref, SHA).
-      3. Append raw event JSON from `${{ toJson(github.event) }}`.
-      4. Write to `.assembled-orchestrator-prompt.md` and export path via `GITHUB_ENV`.
-    </rule>
-  </agent_specific_guardrails>
+```env
+GITHUB_TOKEN=<GitHub App installation token>
+GITHUB_ORG=<organization-or-owner>
+GITHUB_REPO=<target-repository-name>
+```
 
-  <agent_readiness>
-    <verification_protocol>
-      For any non-trivial change (logic, behavior, refactors, dependency updates, config changes, multi-file edits):
-      run verification, fix all failures, re-run until clean. Do not skip or suppress errors.
-    </verification_protocol>
+Optional variables:
 
-    <verification_commands>
-      <!--
-        MANDATORY: After every non-trivial change, run validation BEFORE commit/push.
-        Do NOT commit or push until it passes. Do NOT skip steps.
+- `WEBHOOK_SECRET` — HMAC secret for webhook signature verification
+- `SENTINEL_BOT_LOGIN` — Bot account login for assign-then-verify locking
+- `POLL_INTERVAL` — Seconds between Sentinel poll cycles (default: 60)
 
-        Local (runs all checks sequentially — lint, scan, test):
-          pwsh -NoProfile -File ./scripts/validate.ps1 -All
+## Build and Run
 
-        This is the SAME script that CI calls with individual switches:
-          ./scripts/validate.ps1 -Lint   (CI: lint job)
-          ./scripts/validate.ps1 -Scan   (CI: scan job)
-          ./scripts/validate.ps1 -Test   (CI: test job)
+```bash
+# Run the FastAPI application locally
+uv run uvicorn osapow.main:app --host 0.0.0.0 --port 8000 --reload
 
-        If a check is skipped due to a missing local tool, run:
-          pwsh -NoProfile -File ./scripts/install-dev-tools.ps1
+# Build and run with Docker Compose
+docker compose up --build
 
-        | Check                  | Command                                              | When to run              |
-        |========================|======================================================|==========================|
-        | All (local default)    | ./scripts/validate.ps1 -All                           | Every task               |
-        | Lint only              | ./scripts/validate.ps1 -Lint                           | Quick check              |
-        | Scan only              | ./scripts/validate.ps1 -Scan                           | Secrets concern          |
-        | Test only              | ./scripts/validate.ps1 -Test                           | After lint passes        |
-        | Devcontainer tests     | bash test/test-devcontainer-tools.sh                   | Dockerfile changes       |
-      -->
-      <rule>When adding a CI workflow check, add its equivalent to scripts/validate.ps1.</rule>
-    </verification_commands>
+# Run inside Docker (reads .env automatically)
+docker compose up
+```
 
-    <post_commit_monitoring>
-      After push, monitor CI until green: `gh run list --limit 5`, `gh run watch <id>`, `gh run view <id> --log-failed`.
-      If any workflow fails, stop feature work, triage, fix, re-verify, push. Do not mark work complete while CI is failing.
-    </post_commit_monitoring>
+The application exposes:
+- **Health check:** `GET /health` — returns `{"status": "online", "system": "OS-APOW Notifier"}`
+- **Webhook endpoint:** `POST /webhooks/github` — receives GitHub webhook events
+- **API docs:** `GET /docs` — auto-generated Swagger UI
 
-    <pipeline_speed_policy>
-      <lane name="fast_readiness" blocking="true">Build, lint/format, unit tests — keep fast for merge readiness.</lane>
-      <lane name="extended_validation" blocking="false">Integration suites, security scans, dependency audits.</lane>
-      <rule>Protect the fast lane from slow steps.</rule>
-    </pipeline_speed_policy>
-  </agent_readiness>
+## Lint and Format
 
-  <validation_before_handoff>
-    <step>Run applicable shell tests and verification commands.</step>
-    <step>Validate workflow YAML: `grep -c "^name:" .github/workflows/orchestrator-agent.yml  # expect 1`</step>
-    <step>Summarize: what changed, what was validated, remaining risks (secret-dependent paths, image cache misses).</step>
-  </validation_before_handoff>
+```bash
+# Lint source and tests
+uv run ruff check src/ tests/
 
-  <tool_use_instructions>
-    <instruction id="querying_microsoft_documentation">
-      <applyTo>**</applyTo>
-      <title>Querying Microsoft Documentation</title>
-      <tools><tool>microsoft_docs_search</tool><tool>microsoft_docs_fetch</tool><tool>microsoft_code_sample_search</tool></tools>
-      <guidance>
-        Use these MCP tools for Microsoft technologies (C#, ASP.NET Core, .NET, EF, NuGet).
-        Prioritize retrieved info over training data for newer features.
-      </guidance>
-    </instruction>
-    <instruction id="sequential_thinking_default_usage">
-      <applyTo>*</applyTo>
-      <title>Sequential Thinking</title>
-      <tools><tool>sequential_thinking</tool></tools>
-      <guidance>
-        Use for all non-trivial requests. Enables step-by-step analysis with revision, branching, and dynamic adjustment.
-        Use when: breaking down complex problems, planning, architectural decisions, debugging, multi-step context.
-      </guidance>
-    </instruction>
-    <instruction id="memory_default_usage">
-      <applyTo>*</applyTo>
-      <title>Knowledge Graph Memory</title>
-      <tools><tool>create_entities</tool><tool>create_relations</tool><tool>add_observations</tool><tool>delete_entities</tool><tool>delete_observations</tool><tool>delete_relations</tool><tool>read_graph</tool><tool>search_nodes</tool><tool>open_nodes</tool></tools>
-      <guidance>
-        Use for non-trivial requests. Persist user/project context (preferences, configs, decisions, challenges, solutions).
-        Entities have names, types, and observations. Relations connect entities. Search/read at task start; update after significant work.
-      </guidance>
-    </instruction>
-  </tool_use_instructions>
+# Auto-fix lint issues
+uv run ruff check --fix src/ tests/
 
-  <available_tools>
-    <summary>
-      Tools available inside the devcontainer at runtime. Installed via
-      `.github/.devcontainer/Dockerfile` unless noted otherwise.
-    </summary>
+# Check formatting
+uv run ruff format --check src/ tests/
 
-    <runtimes_and_package_managers>
-      <tool name="dotnet" version="10.0.102">`.NET SDK` — build, test, publish C#/F# projects. Includes Avalonia Templates 11.3.12.</tool>
-      <tool name="node" version="24.14.0 LTS">`Node.js` — JavaScript runtime. Required for MCP server packages (`npx`).</tool>
-      <tool name="npm">`npm` — Node package manager (bundled with Node.js).</tool>
-      <tool name="bun" version="1.3.10">`Bun` — fast JavaScript/TypeScript runtime, bundler, and package manager.</tool>
-      <tool name="uv" version="0.10.9">`uv` — Astral Python package manager. Also provides `uvx` for ephemeral tool runs.</tool>
-    </runtimes_and_package_managers>
+# Apply formatting
+uv run ruff format src/ tests/
+```
 
-    <cli_tools>
-      <tool name="gh">`GitHub CLI` — interact with GitHub API (issues, PRs, repos, releases, actions). Authenticated automatically via `GITHUB_TOKEN` env var in CI; use `gh auth login --with-token` otherwise.</tool>
-      <tool name="opencode" version="1.2.24">`opencode CLI` — AI agent runtime. Runs agents defined in `.opencode/agents/` with MCP server support.</tool>
-      <tool name="git">`Git` — version control (system package + devcontainer feature).</tool>
-    </cli_tools>
+**Ruff configuration** (in `pyproject.toml`):
+- Target: Python 3.12
+- Line length: 120
+- Rule set: `E`, `F`, `I`, `N`, `W`, `UP`
 
-    <github_authentication>
-      <summary>
-        GitHub API access is configured at multiple layers to support both `gh` CLI and MCP GitHub server operations.
-      </summary>
-      <layer name="GITHUB_TOKEN">Provided automatically by GitHub Actions. Passed into the devcontainer via `--remote-env`.</layer>
-      <layer name="GITHUB_PERSONAL_ACCESS_TOKEN">Bridged from `GITHUB_TOKEN` for the `@modelcontextprotocol/server-github` MCP server, which requires this specific env var name. Set in `opencode.json` via the MCP `env` block, in `devcontainer.json` `remoteEnv`, and exported in `run_opencode_prompt.sh`.</layer>
-      <layer name="gh auth login">`run_opencode_prompt.sh` authenticates the `gh` CLI via `echo "$GITHUB_TOKEN" | gh auth login --with-token` before launching opencode.</layer>
-    </github_authentication>
+## Type Checking
 
-    <scripts_directory>
-      <summary>PowerShell helper scripts in `scripts/` for GitHub setup and management tasks.</summary>
-      <script name="scripts/common-auth.ps1">Shared `Initialize-GitHubAuth` function — checks `gh auth status`, authenticates via PAT token (`$env:GITHUB_AUTH_TOKEN`) or interactive login.</script>
-      <script name="scripts/gh-auth.ps1">Extended GitHub auth helper — supports PAT token auth via `--with-token` and interactive fallback.</script>
-      <script name="scripts/import-labels.ps1">Imports labels from `.github/.labels.json` into the repository.</script>
-      <script name="scripts/create-milestones.ps1">Creates project milestones from plan docs.</script>
-      <script name="scripts/test-github-permissions.ps1">Verifies `GITHUB_TOKEN` has required permissions (contents, issues, PRs, packages).</script>
-      <script name="scripts/query.ps1">PR review thread manager — fetches unresolved review threads from a PR, summarizes them, and can batch-reply and resolve them. Supports `--AutoResolve`, `--DryRun`, `--Interactive`, `--ReplyEach`, `--Path`, `--BodyContains` filtering. Use this instead of writing ad-hoc scripts to resolve PR review comments.</script>
-      <script name="scripts/update-remote-indices.ps1">Updates remote instruction module indices.</script>
-    </scripts_directory>
-  </available_tools>
-</instructions>
+```bash
+# Run mypy with strict mode
+uv run mypy src/
+```
+
+**mypy configuration** (in `pyproject.toml`): `strict = true`, `python_version = "3.12"`
+
+## Testing
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with verbose output
+uv run pytest -v
+
+# Run with coverage report
+uv run pytest --cov=osapow --cov-report=term-missing
+
+# Run only unit tests
+uv run pytest tests/unit/
+
+# Run only integration tests
+uv run pytest tests/integration/
+
+# List all test cases without running
+uv run pytest --co -q
+```
+
+**pytest configuration** (in `pyproject.toml`):
+- Test paths: `tests/`
+- asyncio mode: `auto` (all async tests are auto-detected)
+
+### Test Structure
+
+```
+tests/
+├── conftest.py          # Shared fixtures (TestClient, sample payloads)
+├── test_config.py       # Settings import and validation tests
+├── unit/
+│   ├── test_models.py   # WorkItem, WorkItemStatus, TaskType tests
+│   └── test_queue.py    # GitHubQueue initialization and lifecycle tests
+└── integration/
+    └── test_api.py       # API endpoint tests (health, webhook)
+```
+
+### Writing Tests
+
+- Use `pytest-asyncio` for async tests (mode is `auto` — no explicit markers needed)
+- Use `TestClient` from `conftest.py` for API endpoint tests
+- Add new fixture payloads to `tests/conftest.py` or create fixture files
+- Use `respx` for mocking HTTPX requests when testing API client code
+
+## Project Structure
+
+```
+/
+├── pyproject.toml           # Project definition, dependencies, tool config
+├── uv.lock                  # Locked dependency versions
+├── .python-version          # Python version pin (3.12)
+├── Dockerfile               # Container build (python:3.12-slim + uv)
+├── docker-compose.yml       # Local development (app + healthcheck)
+├── README.md                # Project readme
+├── AGENTS.md                # This file — agent instructions
+├── .ai-repository-summary.md # Machine-readable project summary
+│
+├── src/osapow/              # Main application package
+│   ├── __init__.py          # Package root, version (0.1.0)
+│   ├── main.py              # FastAPI app entry point
+│   ├── config.py            # Pydantic Settings (env vars)
+│   │
+│   ├── ear/                 # Ear pillar — Listener service
+│   │   ├── webhook.py       # GitHub webhook handler (POST /webhooks/github)
+│   │   └── triage.py        # Event triage, TaskType enum
+│   │
+│   ├── state/               # State pillar — Queue service
+│   │   ├── models.py        # WorkItem, WorkItemStatus models
+│   │   └── queue.py         # ITaskQueue ABC, GitHubQueue implementation
+│   │
+│   ├── brain/               # Brain pillar — Orchestrator service
+│   │   ├── orchestrator.py  # Sentinel supervisor (poll, claim, execute)
+│   │   └── decomposer.py    # Task-to-workflow mapping
+│   │
+│   ├── hands/               # Hands pillar — Executor service
+│   │   └── executor.py      # Shell-bridge DevContainer executor
+│   │
+│   └── common/              # Shared utilities
+│       ├── logging.py       # Structured logging
+│       └── secrets.py       # Secret management
+│
+├── tests/                   # Test suite
+│   ├── conftest.py          # Shared fixtures
+│   ├── test_config.py       # Config tests
+│   ├── unit/                # Unit tests
+│   └── integration/         # Integration tests
+│
+├── docs/                    # Documentation
+├── plan_docs/               # Seeded plan documents (do not lint)
+├── scripts/                 # Helper scripts (PowerShell + Bash)
+│
+├── .github/workflows/       # CI/CD pipelines
+│   ├── ci.yml               # Python lint, type check, test, Docker build
+│   ├── validate.yml         # Repository validation
+│   └── orchestrator-agent.yml # AI agent orchestration
+│
+├── .opencode/               # Agent definitions and commands
+│   ├── agents/              # Specialist agent prompts
+│   ├── commands/            # Reusable command prompts
+│   └── opencode.json        # opencode CLI config (MCP servers)
+│
+├── .devcontainer/           # Consumer devcontainer (prebuilt GHCR image)
+└── local_ai_instruction_modules/ # Markdown instruction modules
+```
+
+## Architecture: Four-Pillar Design
+
+The system is organized around four conceptual pillars that map to distinct responsibilities:
+
+### 1. Ear (Listener)
+- **Entry point:** `src/osapow/ear/webhook.py` — FastAPI router at `/webhooks/github`
+- **Triage:** `src/osapow/ear/triage.py` — parses issue templates, maps to `TaskType`
+- **Purpose:** High-performance webhook receiver; verifies HMAC SHA-256 signatures, returns 202 Accepted within GitHub's timeout window, routes events to triage
+
+### 2. State (Queue)
+- **Models:** `src/osapow/state/models.py` — `WorkItem`, `WorkItemStatus` (Pydantic v2)
+- **Queue:** `src/osapow/state/queue.py` — `ITaskQueue` (ABC) + `GitHubQueue` (GitHub Issues-based)
+- **Pattern:** "Markdown as a Database" — uses GitHub Issues, Labels, Milestones as persistence
+- **Concurrency:** Assign-then-verify distributed locking pattern
+
+### 3. Brain (Orchestrator)
+- **Sentinel:** `src/osapow/brain/orchestrator.py` — persistent supervisor
+- **Decomposer:** `src/osapow/brain/decomposer.py` — maps `TaskType` to workflow instruction modules
+- **Features:** Jittered exponential backoff (max 960s), heartbeat coroutine (5 min), graceful shutdown on SIGTERM/SIGINT
+
+### 4. Hands (Executor)
+- **Executor:** `src/osapow/hands/executor.py` — shell-bridge execution pattern (ADR 07)
+- **Isolation:** DevContainer-based workers with network isolation and resource constraints (2 CPU, 4GB RAM)
+- **Flow:** up → start → prompt → stop
+
+### Key Architectural Decisions
+
+- **ADR 07:** Shell-Bridge Execution — Orchestrator interacts via shell scripts only
+- **ADR 08:** Polling-First Resiliency — Polling as primary discovery, webhooks as optimization
+- **ADR 09:** Provider-Agnostic Interface — `ITaskQueue` ABC for future provider support (Linear, Jira, SQL)
+
+## Code Style and Conventions
+
+### Python Conventions
+
+- **Python 3.12+** — use modern syntax (`type` unions, `StrEnum`, etc.)
+- **Type hints required** on all function signatures (enforced by mypy strict mode)
+- **Docstrings:** Use triple-quoted docstrings on all modules, classes, and public functions. Follow the Google-style format with `Args:` and `Returns:` sections
+- **Async-first:** All I/O-bound operations use `async/await`
+- **Pydantic v2 models** for all data validation — use `BaseModel` for schemas, `BaseSettings` for configuration
+
+### Naming Conventions
+
+- Modules: `snake_case.py`
+- Classes: `PascalCase` (e.g., `GitHubQueue`, `WorkItem`, `Sentinel`)
+- Functions/methods: `snake_case` (e.g., `fetch_queued_tasks`, `triage_event`)
+- Constants: `UPPER_SNAKE_CASE` (e.g., `WorkItemStatus.QUEUED`)
+- Private members: prefix with `_` (e.g., `_get_client`, `_shutdown_requested`)
+
+### Import Order
+
+Enforced by ruff (`I` rule set):
+1. Standard library
+2. Third-party packages
+3. Local application imports
+
+### Error Handling
+
+- Use `response.raise_for_status()` for HTTP errors
+- Use `asyncio.wait_for()` with timeouts for subprocess operations
+- Return exit code 124 on subprocess timeout (consistent with `timeout` command)
+- Never swallow exceptions silently — at minimum, log them
+
+### Secrets
+
+- All secrets loaded from environment variables via `pydantic-settings`
+- Never hardcode tokens, secrets, or API keys
+- Never commit `.env` files
+- `GITHUB_TOKEN` is provided automatically by GitHub Actions
+
+## PR and Commit Guidelines
+
+### Commit Format
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+type(scope): description
+
+[optional body]
+```
+
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `build`
+
+Examples:
+```
+feat(ear): add HMAC signature verification for webhooks
+fix(queue): resolve race condition in assign-then-verify locking
+docs: update AGENTS.md with testing instructions
+test(state): add WorkItem model validation tests
+ci: add Python lint and type-check workflow
+```
+
+### PR Guidelines
+
+- Keep changes minimal and targeted
+- Include tests for any new behavior or bug fixes
+- Run `uv run ruff check src/ tests/` and `uv run pytest` before pushing
+- All CI checks must pass before merge
+
+## Common Pitfalls
+
+### Environment Variables
+- `Settings` will crash at import time if `GITHUB_TOKEN`, `GITHUB_ORG`, or `GITHUB_REPO` are missing. Set them in `.env` for local development or ensure they are present in CI.
+- Tests that import `config.py` directly may need to mock or set these variables.
+
+### asyncio Mode
+- `pytest.ini_options.asyncio_mode = "auto"` means all async test functions are automatically wrapped — do not add `@pytest.mark.asyncio` decorators.
+
+### Ruff Format vs Check
+- `ruff check` catches lint errors (unused imports, naming, etc.)
+- `ruff format` handles code formatting (line length, indentation)
+- Both must pass: run `ruff check` then `ruff format --check`
+
+### Docker Builds
+- The `Dockerfile` uses `uv pip install --system -e .` — it does not install dev dependencies
+- Docker Compose reads `.env` automatically via `env_file: .env`
+
+### Import Paths
+- The package is installed as `osapow` (not `src.osapow`)
+- Always use `from osapow.xxx import yyy` (not `from src.osapow`)
+
+### plan_docs/ Directory
+- Contains externally-generated documents seeded at clone time
+- Do not lint or reformat these files
+
+## Verification Checklist
+
+Run these before committing any non-trivial change:
+
+```bash
+# 1. Lint
+uv run ruff check src/ tests/
+
+# 2. Format check
+uv run ruff format --check src/ tests/
+
+# 3. Type check
+uv run mypy src/
+
+# 4. Tests
+uv run pytest -v
+
+# 5. Verify import
+uv run python -c "import osapow"
+```
