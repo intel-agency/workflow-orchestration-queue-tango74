@@ -1,5 +1,5 @@
 {
-  "name": "workflow-orchestration-queue-tango74",
+  "name": "workflow-orchestration-queue-tango74-devcontainer",
   "image": "ghcr.io/intel-agency/workflow-orchestration-queue-tango74/devcontainer:main-latest",
   "containerEnv": {
     "DOTNET_ROOT": "/usr/share/dotnet"
