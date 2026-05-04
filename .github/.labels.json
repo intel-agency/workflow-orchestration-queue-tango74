@@ -142,5 +142,11 @@
         "color": "5319e7",
         "default": false,
         "description": "User story"
+    },
+    {
+        "name": "orchestration:plan-approved",
+        "color": "0E8A16",
+        "default": false,
+        "description": "Application plan approved - ready for epic creation"
     }
 ]
